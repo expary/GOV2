@@ -72,6 +72,38 @@ func TestRunUpRollsBackWhenMigrationRecordInsertFails(t *testing.T) {
 	}
 }
 
+func TestRunUpSkipsAlreadyAppliedMigrations(t *testing.T) {
+	dir := t.TempDir()
+	writeTestSQL(t, dir, "000001_init.up.sql", "CREATE TABLE first_migration (id BIGINT);")
+	writeTestSQL(t, dir, "000002_audit.up.sql", "CREATE TABLE second_migration (id BIGINT);")
+
+	state := &testDriverState{
+		appliedVersions: map[string]struct{}{
+			"000001_init": {},
+		},
+	}
+	db := openTestDB(t, state)
+
+	applied, err := NewRunner(db, dir).RunUp(context.Background())
+	if err != nil {
+		t.Fatalf("RunUp() error = %v", err)
+	}
+	if len(applied) != 1 || applied[0].Version != "000002_audit" {
+		t.Fatalf("RunUp() applied = %+v, want only second migration", applied)
+	}
+
+	snapshot := state.snapshot()
+	if snapshot.begins != 1 || snapshot.commits != 1 || snapshot.rollbacks != 0 {
+		t.Fatalf("transaction counts = begins:%d commits:%d rollbacks:%d, want 1/1/0", snapshot.begins, snapshot.commits, snapshot.rollbacks)
+	}
+	if containsStatement(snapshot.txExecs, "first_migration") {
+		t.Fatalf("transaction statements = %v, already-applied migration should not run", snapshot.txExecs)
+	}
+	if !containsStatement(snapshot.txExecs, "second_migration") {
+		t.Fatalf("transaction statements = %v, want unapplied migration SQL", snapshot.txExecs)
+	}
+}
+
 func TestRunSeedsSkipsMigrationFilesAndCommitsEachSeed(t *testing.T) {
 	dir := t.TempDir()
 	writeTestSQL(t, dir, "001_system.sql", "INSERT INTO permissions (code) VALUES ('system.users.read');")
@@ -181,6 +213,7 @@ type testDriverState struct {
 	rollbacks           int
 	inTx                bool
 	failMigrationInsert bool
+	appliedVersions     map[string]struct{}
 }
 
 func (s *testDriverState) snapshot() testDriverSnapshot {
@@ -247,11 +280,20 @@ func (c *testConn) ExecContext(_ context.Context, query string, _ []driver.Named
 	return driver.RowsAffected(1), nil
 }
 
-func (c *testConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *testConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.state.mu.Lock()
 	defer c.state.mu.Unlock()
 
 	c.state.queries = append(c.state.queries, query)
+	if len(c.state.appliedVersions) > 0 && strings.Contains(query, "SELECT version FROM gov2_schema_migrations") {
+		if len(args) > 0 {
+			if version, ok := args[0].Value.(string); ok {
+				if _, exists := c.state.appliedVersions[version]; exists {
+					return &singleVersionRows{version: version}, nil
+				}
+			}
+		}
+	}
 	return emptyRows{}, nil
 }
 
@@ -289,4 +331,26 @@ func (emptyRows) Close() error {
 
 func (emptyRows) Next([]driver.Value) error {
 	return io.EOF
+}
+
+type singleVersionRows struct {
+	version string
+	read    bool
+}
+
+func (*singleVersionRows) Columns() []string {
+	return []string{"version"}
+}
+
+func (*singleVersionRows) Close() error {
+	return nil
+}
+
+func (r *singleVersionRows) Next(values []driver.Value) error {
+	if r.read {
+		return io.EOF
+	}
+	values[0] = r.version
+	r.read = true
+	return nil
 }

@@ -115,6 +115,8 @@ These tests exercise:
 - SQL audit-log filter indexes for created time, actor, action, resource, and
   resource ID filters
 - migration filename numbering and matching `.up.sql` / `.down.sql` pairs
+- migration runner transaction behavior, rollback on record-write failure, and
+  skipping already-applied migration versions
 - memory-store seed role permissions and menu metadata against built-in module defaults
 - compile-time extension route middleware and RBAC behavior, including
   non-empty permissions overriding an accidentally public route flag

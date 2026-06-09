@@ -54,6 +54,30 @@ func TestSystemSeedPermissionsMatchDomainRegistry(t *testing.T) {
 	}
 }
 
+func TestSystemSeedDoesNotCreateDefaultUsers(t *testing.T) {
+	sql := strings.ToLower(readSystemSeed(t))
+	for _, table := range []string{"gov2_users", "gov2_user_roles"} {
+		if strings.Contains(sql, "insert into "+table) {
+			t.Fatalf("system seed must not create default production user data in %s", table)
+		}
+	}
+}
+
+func TestSystemSeedRolePermissionsMatchBuiltInDefaults(t *testing.T) {
+	got := seedRolePermissions(t, readSystemSeed(t))
+	want := map[string][]string{
+		"admin":    {domain.PermissionAll},
+		"operator": sortedStrings(operatorDefaultPermissions()),
+	}
+
+	assertMapKeys(t, "seed role permissions", stringKeys(got), stringKeys(want))
+	for code, wantPermissions := range want {
+		if strings.Join(got[code], "\n") != strings.Join(wantPermissions, "\n") {
+			t.Fatalf("seed role %q permissions = %+v, want %+v", code, got[code], wantPermissions)
+		}
+	}
+}
+
 func TestSystemSeedMenusMatchBuiltInModuleRegistry(t *testing.T) {
 	got := seedMenus(t, readSystemSeed(t))
 	want := map[string]seedMenu{}
@@ -142,6 +166,40 @@ func seedPermissions(t *testing.T, sql string) map[string]seedPermission {
 	return permissions
 }
 
+func seedRolePermissions(t *testing.T, sql string) map[string][]string {
+	t.Helper()
+
+	roles := map[string][]string{}
+
+	singlePattern := regexp.MustCompile(`(?s)INSERT INTO gov2_role_permissions.*?JOIN gov2_permissions p ON p\.code = '([^']*)'.*?WHERE r\.code = '([^']*)'`)
+	for _, match := range singlePattern.FindAllStringSubmatch(sql, -1) {
+		roles[match[2]] = append(roles[match[2]], match[1])
+	}
+
+	listPattern := regexp.MustCompile(`(?s)INSERT INTO gov2_role_permissions.*?JOIN gov2_permissions p ON p\.code IN \((.*?)\).*?WHERE r\.code = '([^']*)'`)
+	for _, match := range listPattern.FindAllStringSubmatch(sql, -1) {
+		roles[match[2]] = append(roles[match[2]], quotedSQLValues(match[1])...)
+	}
+
+	if len(roles) == 0 {
+		t.Fatal("system seed must assign role permissions")
+	}
+	for code, permissions := range roles {
+		roles[code] = sortedStrings(permissions)
+	}
+	return roles
+}
+
+func quotedSQLValues(section string) []string {
+	valuePattern := regexp.MustCompile(`'([^']*)'`)
+	matches := valuePattern.FindAllStringSubmatch(section, -1)
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		values = append(values, match[1])
+	}
+	return values
+}
+
 type seedMenu struct {
 	Name       string
 	Parent     string
@@ -208,6 +266,19 @@ func parseSeedMenuTuples(t *testing.T, section string, parent string) map[string
 	return menus
 }
 
+func operatorDefaultPermissions() []string {
+	return []string{
+		domain.PermissionDashboardView,
+		domain.PermissionSystemUserList,
+		domain.PermissionSystemRoleList,
+		domain.PermissionSystemMenuList,
+		domain.PermissionSystemModuleList,
+		domain.PermissionSystemDictionaryList,
+		domain.PermissionSystemSettingList,
+		domain.PermissionSystemAuditList,
+	}
+}
+
 func sectionBetween(t *testing.T, source string, start string, end string) string {
 	t.Helper()
 
@@ -231,6 +302,12 @@ func assertMapKeys(t *testing.T, label string, got []string, want []string) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("%s mismatch:\ngot:\n%s\nwant:\n%s", label, strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
+}
+
+func sortedStrings(items []string) []string {
+	out := append([]string(nil), items...)
+	sort.Strings(out)
+	return out
 }
 
 func stringKeys[V any](items map[string]V) []string {

@@ -127,6 +127,8 @@ These tests exercise:
 - explicit SQL audit-write error propagation
 - SQL store transaction helper error mapping for begin, function, and commit
   failures, including rollback on function failure
+- SQL role-permission helper trimming, blank-value skipping, replacement order,
+  and unknown-permission rejection before insert
 - audit log creation for core system writes
 - SQL-backed login, profile, RBAC, core system writes, and audit-log filtering when PostgreSQL integration is enabled
 

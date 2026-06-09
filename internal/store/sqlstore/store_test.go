@@ -6,6 +6,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"testing"
 
@@ -168,6 +170,103 @@ func TestWithTxMapsTransactionErrors(t *testing.T) {
 	})
 }
 
+func TestAssignRolePermissionTrimsPermissionAndSkipsEmptyValues(t *testing.T) {
+	state := &txTestDriverState{
+		permissions: map[string]bool{
+			domain.PermissionDashboardView: true,
+		},
+	}
+	store := New(openTxTestDB(t, state))
+
+	err := store.withTx(context.Background(), func(tx *sql.Tx) error {
+		if err := assignRolePermission(context.Background(), tx, 42, "  "+domain.PermissionDashboardView+"  "); err != nil {
+			return err
+		}
+		return assignRolePermission(context.Background(), tx, 42, "   ")
+	})
+	if err != nil {
+		t.Fatalf("assignRolePermission() error = %v", err)
+	}
+
+	snapshot := state.snapshot()
+	if len(snapshot.queries) != 1 {
+		t.Fatalf("expected one permission lookup for non-empty permission, got %+v", snapshot.queries)
+	}
+	if got := snapshot.queries[0].args[0]; got != domain.PermissionDashboardView {
+		t.Fatalf("permission lookup arg = %q, want trimmed %q", got, domain.PermissionDashboardView)
+	}
+	if len(snapshot.execs) != 1 {
+		t.Fatalf("expected one role-permission insert, got %+v", snapshot.execs)
+	}
+	if !strings.Contains(snapshot.execs[0].query, "INSERT INTO gov2_role_permissions") {
+		t.Fatalf("expected role-permission insert, got %q", snapshot.execs[0].query)
+	}
+	if fmt.Sprint(snapshot.execs[0].args[0]) != "42" || snapshot.execs[0].args[1] != domain.PermissionDashboardView {
+		t.Fatalf("role-permission insert args = %+v, want role id 42 and trimmed permission", snapshot.execs[0].args)
+	}
+}
+
+func TestAssignRolePermissionRejectsUnknownPermissionBeforeInsert(t *testing.T) {
+	state := &txTestDriverState{}
+	store := New(openTxTestDB(t, state))
+
+	err := store.withTx(context.Background(), func(tx *sql.Tx) error {
+		return assignRolePermission(context.Background(), tx, 42, "unknown:permission")
+	})
+	if !errors.Is(err, repository.ErrInvalidReference) {
+		t.Fatalf("expected unknown permission invalid reference, got %v", err)
+	}
+
+	snapshot := state.snapshot()
+	if snapshot.begins != 1 || snapshot.commits != 0 || snapshot.rollbacks != 1 {
+		t.Fatalf("transaction counts = begins:%d commits:%d rollbacks:%d, want 1/0/1", snapshot.begins, snapshot.commits, snapshot.rollbacks)
+	}
+	if len(snapshot.queries) != 1 {
+		t.Fatalf("expected one permission lookup before rejection, got %+v", snapshot.queries)
+	}
+	if len(snapshot.execs) != 0 {
+		t.Fatalf("expected no role-permission insert for unknown permission, got %+v", snapshot.execs)
+	}
+}
+
+func TestReplaceRolePermissionsDeletesExistingBeforeAssigningPermissions(t *testing.T) {
+	state := &txTestDriverState{
+		permissions: map[string]bool{
+			domain.PermissionDashboardView:  true,
+			domain.PermissionSystemRoleList: true,
+		},
+	}
+	store := New(openTxTestDB(t, state))
+
+	err := store.withTx(context.Background(), func(tx *sql.Tx) error {
+		return replaceRolePermissions(context.Background(), tx, 7, []string{
+			"",
+			domain.PermissionDashboardView,
+			"  " + domain.PermissionSystemRoleList + "  ",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replaceRolePermissions() error = %v", err)
+	}
+
+	snapshot := state.snapshot()
+	if len(snapshot.queries) != 2 {
+		t.Fatalf("expected two permission lookups, got %+v", snapshot.queries)
+	}
+	if len(snapshot.execs) != 3 {
+		t.Fatalf("expected delete plus two inserts, got %+v", snapshot.execs)
+	}
+	if !strings.Contains(snapshot.execs[0].query, "DELETE FROM gov2_role_permissions") {
+		t.Fatalf("expected existing permissions to be deleted first, got %q", snapshot.execs[0].query)
+	}
+	if !strings.Contains(snapshot.execs[1].query, "INSERT INTO gov2_role_permissions") || !strings.Contains(snapshot.execs[2].query, "INSERT INTO gov2_role_permissions") {
+		t.Fatalf("expected role-permission inserts after delete, got %+v", snapshot.execs)
+	}
+	if snapshot.execs[2].args[1] != domain.PermissionSystemRoleList {
+		t.Fatalf("expected second insert permission to be trimmed, got args %+v", snapshot.execs[2].args)
+	}
+}
+
 func TestNormalizePageUsesRepositoryPaginationContract(t *testing.T) {
 	page, pageSize := normalizePage(0, repository.MaxPageSize+1)
 	if page != 1 || pageSize != repository.MaxPageSize {
@@ -227,15 +326,25 @@ type txTestDriverSnapshot struct {
 	begins    int
 	commits   int
 	rollbacks int
+	queries   []txTestStatement
+	execs     []txTestStatement
 }
 
 type txTestDriverState struct {
-	mu        sync.Mutex
-	beginErr  error
-	commitErr error
-	begins    int
-	commits   int
-	rollbacks int
+	mu          sync.Mutex
+	beginErr    error
+	commitErr   error
+	permissions map[string]bool
+	begins      int
+	commits     int
+	rollbacks   int
+	queries     []txTestStatement
+	execs       []txTestStatement
+}
+
+type txTestStatement struct {
+	query string
+	args  []driver.Value
 }
 
 func (s *txTestDriverState) snapshot() txTestDriverSnapshot {
@@ -246,6 +355,8 @@ func (s *txTestDriverState) snapshot() txTestDriverSnapshot {
 		begins:    s.begins,
 		commits:   s.commits,
 		rollbacks: s.rollbacks,
+		queries:   append([]txTestStatement(nil), s.queries...),
+		execs:     append([]txTestStatement(nil), s.execs...),
 	}
 }
 
@@ -311,6 +422,33 @@ func (c *txTestConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, erro
 	return &txTestTx{state: c.state}, nil
 }
 
+func (c *txTestConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+
+	c.state.execs = append(c.state.execs, txTestStatement{query: query, args: namedValues(args)})
+	return driver.RowsAffected(1), nil
+}
+
+func (c *txTestConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	values := namedValues(args)
+
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+
+	c.state.queries = append(c.state.queries, txTestStatement{query: query, args: values})
+	if strings.Contains(query, "SELECT EXISTS (SELECT 1 FROM gov2_permissions WHERE code = $1)") {
+		var exists bool
+		if len(values) > 0 {
+			if permission, ok := values[0].(string); ok {
+				exists = c.state.permissions[permission]
+			}
+		}
+		return &singleBoolRows{value: exists}, nil
+	}
+	return emptyTxRows{}, nil
+}
+
 type txTestTx struct {
 	state *txTestDriverState
 }
@@ -329,4 +467,48 @@ func (tx *txTestTx) Rollback() error {
 
 	tx.state.rollbacks++
 	return nil
+}
+
+func namedValues(args []driver.NamedValue) []driver.Value {
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg.Value
+	}
+	return values
+}
+
+type singleBoolRows struct {
+	value bool
+	read  bool
+}
+
+func (*singleBoolRows) Columns() []string {
+	return []string{"exists"}
+}
+
+func (*singleBoolRows) Close() error {
+	return nil
+}
+
+func (r *singleBoolRows) Next(values []driver.Value) error {
+	if r.read {
+		return io.EOF
+	}
+	values[0] = r.value
+	r.read = true
+	return nil
+}
+
+type emptyTxRows struct{}
+
+func (emptyTxRows) Columns() []string {
+	return []string{}
+}
+
+func (emptyTxRows) Close() error {
+	return nil
+}
+
+func (emptyTxRows) Next([]driver.Value) error {
+	return io.EOF
 }

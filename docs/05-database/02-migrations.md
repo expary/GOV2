@@ -6,6 +6,8 @@ GOV2 now includes the first PostgreSQL migration draft.
 
 - `migrations/000001_init.up.sql`
 - `migrations/000001_init.down.sql`
+- `migrations/000002_audit_resource_id_index.up.sql`
+- `migrations/000002_audit_resource_id_index.down.sql`
 - `migrations/seeds/system.sql`
 
 ## Commands
@@ -43,8 +45,8 @@ The initial schema covers:
 - sessions
 
 Mutable system tables use soft-delete-aware unique indexes where duplicate business keys should be reusable after deletion. Examples include user usernames, role codes, menu names, and dictionary codes.
-Audit-log query indexes cover created time plus actor, action, and resource
-filters used by the admin audit log API.
+Audit-log query indexes cover created time plus actor, action, resource, and
+resource ID filters used by the admin audit log API.
 
 ## Seed Data
 
@@ -64,6 +66,8 @@ Operational settings are not reset by repeat seed runs; administrators may chang
 ## Rules
 
 - Migrations are ordered and append-only after release.
+- Migration numeric prefixes must be unique and contiguous from `000001`; do not
+  reuse a number or leave gaps.
 - Each numbered `.up.sql` migration should have a matching `.down.sql` file for
   development rollback and contract completeness.
 - Seed data must be idempotent.

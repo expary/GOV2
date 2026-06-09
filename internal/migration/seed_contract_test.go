@@ -151,6 +151,7 @@ func TestMigrationFilesAreNumberedAndPaired(t *testing.T) {
 	namePattern := regexp.MustCompile(`^([0-9]{6}_[a-z0-9_]+)\.(up|down)\.sql$`)
 	up := map[string]struct{}{}
 	down := map[string]struct{}{}
+	numberedVersions := map[int]string{}
 
 	for _, name := range files {
 		match := namePattern.FindStringSubmatch(name)
@@ -160,12 +161,25 @@ func TestMigrationFilesAreNumberedAndPaired(t *testing.T) {
 		switch match[2] {
 		case "up":
 			up[match[1]] = struct{}{}
+			number, err := strconv.Atoi(match[1][:6])
+			if err != nil {
+				t.Fatalf("parse migration number from %q: %v", name, err)
+			}
+			if previous, exists := numberedVersions[number]; exists {
+				t.Fatalf("migration number %06d reused by %q and %q", number, previous, match[1])
+			}
+			numberedVersions[number] = match[1]
 		case "down":
 			down[match[1]] = struct{}{}
 		}
 	}
 
 	assertMapKeys(t, "migration up/down pairs", stringKeys(up), stringKeys(down))
+	for number := 1; number <= len(numberedVersions); number++ {
+		if _, exists := numberedVersions[number]; !exists {
+			t.Fatalf("migration numbers must be contiguous from 000001; missing %06d", number)
+		}
+	}
 }
 
 func readSystemSeed(t *testing.T) string {

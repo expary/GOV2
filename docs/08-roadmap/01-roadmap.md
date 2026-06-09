@@ -4,7 +4,7 @@ This roadmap keeps GOV2 moving from MVP to a complete framework without copying 
 
 ## Phase 0: MVP Foundation
 
-Status: in progress.
+Status: complete.
 
 Deliverables:
 
@@ -78,6 +78,8 @@ Exit criteria:
 - Design docs exist for architecture, boundaries, backend, frontend, database, and AI programming.
 
 ## Phase 1: SQL Persistence
+
+Status: in progress.
 
 Deliverables:
 

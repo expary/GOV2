@@ -112,6 +112,8 @@ These tests exercise:
   and menu metadata against backend permission, domain, and module registries
 - SQL startup gating that skips automatic seed data and development-user
   bootstrap in production
+- SQL audit-log filter indexes for created time, actor, action, resource, and
+  resource ID filters
 - memory-store seed role permissions and menu metadata against built-in module defaults
 - compile-time extension route middleware and RBAC behavior, including
   non-empty permissions overriding an accidentally public route flag

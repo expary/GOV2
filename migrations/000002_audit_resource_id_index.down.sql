@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS gov2_audit_logs_resource_id_created_idx;

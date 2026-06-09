@@ -223,6 +223,7 @@ gov2_audit_logs(created_at desc)
 gov2_audit_logs(actor_id, created_at desc)
 gov2_audit_logs(action, created_at desc)
 gov2_audit_logs(resource, created_at desc)
+gov2_audit_logs(resource_id, created_at desc)
 ```
 
 Avoid adding speculative indexes before query patterns exist.

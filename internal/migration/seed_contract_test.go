@@ -2,6 +2,7 @@ package migration
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -129,17 +130,18 @@ func TestSystemSeedUserStatusDictionaryMatchesDomain(t *testing.T) {
 	}
 }
 
-func TestInitialMigrationDefinesAuditLogFilterIndexes(t *testing.T) {
-	sql := strings.ToLower(readInitialMigration(t))
+func TestMigrationsDefineAuditLogFilterIndexes(t *testing.T) {
+	sql := strings.ToLower(readUpMigrations(t))
 	requiredIndexes := []string{
 		"create index gov2_audit_logs_created_at_idx on gov2_audit_logs (created_at desc)",
 		"create index gov2_audit_logs_actor_created_idx on gov2_audit_logs (actor_id, created_at desc)",
 		"create index gov2_audit_logs_action_created_idx on gov2_audit_logs (action, created_at desc)",
 		"create index gov2_audit_logs_resource_created_idx on gov2_audit_logs (resource, created_at desc)",
+		"create index gov2_audit_logs_resource_id_created_idx on gov2_audit_logs (resource_id, created_at desc)",
 	}
 	for _, index := range requiredIndexes {
 		if !strings.Contains(sql, index) {
-			t.Fatalf("initial migration must define audit-log filter index: %s", index)
+			t.Fatalf("migrations must define audit-log filter index: %s", index)
 		}
 	}
 }
@@ -154,14 +156,32 @@ func readSystemSeed(t *testing.T) string {
 	return string(data)
 }
 
-func readInitialMigration(t *testing.T) string {
+func readUpMigrations(t *testing.T) string {
 	t.Helper()
 
-	data, err := os.ReadFile("../../migrations/000001_init.up.sql")
+	dir := "../../migrations"
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("read initial migration: %v", err)
+		t.Fatalf("read migrations: %v", err)
 	}
-	return string(data)
+	names := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".up.sql") {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	sort.Strings(names)
+
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read migration %s: %v", name, err)
+		}
+		parts = append(parts, string(data))
+	}
+	return strings.Join(parts, "\n")
 }
 
 type seedPermission struct {

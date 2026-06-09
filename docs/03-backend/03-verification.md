@@ -108,8 +108,8 @@ These tests exercise:
 - RBAC and profile permission normalization for trimmed, duplicate, and empty
   role permission entries, including exclusive wildcard profile aggregation
 - built-in frontend route metadata against actual Vue Router protected routes
-- SQL seed permission, role assignment, no-default-user, and menu metadata
-  against backend permission and module registries
+- SQL seed permission, role assignment, no-default-user, user-status dictionary,
+  and menu metadata against backend permission, domain, and module registries
 - SQL startup gating that skips automatic seed data and development-user
   bootstrap in production
 - memory-store seed role permissions and menu metadata against built-in module defaults

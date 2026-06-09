@@ -104,6 +104,31 @@ func TestSystemSeedMenusMatchBuiltInModuleRegistry(t *testing.T) {
 	}
 }
 
+func TestSystemSeedUserStatusDictionaryMatchesDomain(t *testing.T) {
+	sql := readSystemSeed(t)
+	dictionary := seedDictionary(t, sql, "user_status")
+	if dictionary != (seedDictionaryDefinition{
+		Code:        "user_status",
+		Name:        "User Status",
+		Description: "Built-in user status dictionary",
+	}) {
+		t.Fatalf("user_status seed dictionary = %+v", dictionary)
+	}
+
+	got := seedDictionaryItems(t, sql, "user_status")
+	want := map[string]seedDictionaryItem{
+		domain.UserStatusActive:   {Label: "Active", Value: domain.UserStatusActive, Sort: 1},
+		domain.UserStatusDisabled: {Label: "Disabled", Value: domain.UserStatusDisabled, Sort: 2},
+	}
+
+	assertMapKeys(t, "seed user_status items", stringKeys(got), stringKeys(want))
+	for value, wantItem := range want {
+		if gotItem := got[value]; gotItem != wantItem {
+			t.Fatalf("user_status item %q = %+v, want %+v", value, gotItem, wantItem)
+		}
+	}
+}
+
 func TestInitialMigrationDefinesAuditLogFilterIndexes(t *testing.T) {
 	sql := strings.ToLower(readInitialMigration(t))
 	requiredIndexes := []string{
@@ -264,6 +289,63 @@ func parseSeedMenuTuples(t *testing.T, section string, parent string) map[string
 		menus[menu.Name] = menu
 	}
 	return menus
+}
+
+type seedDictionaryDefinition struct {
+	Code        string
+	Name        string
+	Description string
+}
+
+func seedDictionary(t *testing.T, sql string, code string) seedDictionaryDefinition {
+	t.Helper()
+
+	section := sectionBetween(t, sql, "INSERT INTO gov2_dictionaries", "ON CONFLICT (lower(code))")
+	tuplePattern := regexp.MustCompile(`\(\s*'([^']*)',\s*'([^']*)',\s*'([^']*)'\s*\)`)
+	for _, match := range tuplePattern.FindAllStringSubmatch(section, -1) {
+		if match[1] == code {
+			return seedDictionaryDefinition{
+				Code:        match[1],
+				Name:        match[2],
+				Description: match[3],
+			}
+		}
+	}
+	t.Fatalf("system seed must declare dictionary %q", code)
+	return seedDictionaryDefinition{}
+}
+
+type seedDictionaryItem struct {
+	Label string
+	Value string
+	Sort  int
+}
+
+func seedDictionaryItems(t *testing.T, sql string, dictionaryCode string) map[string]seedDictionaryItem {
+	t.Helper()
+
+	section := sectionBetween(t, sql, "INSERT INTO gov2_dictionary_items", "ON CONFLICT (dictionary_id, value)")
+	if !strings.Contains(section, "ON d.code = '"+dictionaryCode+"'") {
+		t.Fatalf("system seed dictionary items must target dictionary %q", dictionaryCode)
+	}
+	tuplePattern := regexp.MustCompile(`\(\s*'([^']*)',\s*'([^']*)',\s*([0-9]+)\s*\)`)
+	items := map[string]seedDictionaryItem{}
+	for _, match := range tuplePattern.FindAllStringSubmatch(section, -1) {
+		sortValue, err := strconv.Atoi(match[3])
+		if err != nil {
+			t.Fatalf("parse dictionary item sort %q: %v", match[3], err)
+		}
+		item := seedDictionaryItem{
+			Label: match[1],
+			Value: match[2],
+			Sort:  sortValue,
+		}
+		items[item.Value] = item
+	}
+	if len(items) == 0 {
+		t.Fatalf("system seed must declare dictionary items for %q", dictionaryCode)
+	}
+	return items
 }
 
 func operatorDefaultPermissions() []string {

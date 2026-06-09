@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS gov2_sessions;
+DROP TABLE IF EXISTS gov2_settings;
+DROP TABLE IF EXISTS gov2_audit_logs;
+DROP TABLE IF EXISTS gov2_dictionary_items;
+DROP TABLE IF EXISTS gov2_dictionaries;
+DROP TABLE IF EXISTS gov2_menus;
+DROP TABLE IF EXISTS gov2_role_permissions;
+DROP TABLE IF EXISTS gov2_user_roles;
+DROP TABLE IF EXISTS gov2_permissions;
+DROP TABLE IF EXISTS gov2_roles;
+DROP TABLE IF EXISTS gov2_users;

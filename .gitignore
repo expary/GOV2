@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.idea/
+.vscode/
+node_modules/
+bin/
+dist/
+coverage/
+tmp/
+*.log
+config/gov2.json

@@ -1,0 +1,1646 @@
+openapi: 3.1.0
+info:
+  title: GOV2 API
+  version: 0.1.0
+  license:
+    name: MIT
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /ready:
+    get:
+      summary: Readiness check
+      security: []
+      responses:
+        "200":
+          description: Dependencies are ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: One or more dependencies are not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+  /metrics:
+    get:
+      summary: Runtime metrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus-compatible runtime metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+  /app/config:
+    get:
+      summary: Public application configuration
+      security: []
+      responses:
+        "200":
+          description: Safe public application configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppConfig"
+  /auth/login:
+    post:
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+  /auth/logout:
+    post:
+      summary: Logout
+      responses:
+        "200":
+          description: Logout result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /auth/profile:
+    get:
+      summary: Current user profile
+      responses:
+        "200":
+          description: Current user, roles, and permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthProfile"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    put:
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Updated current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /auth/password:
+    put:
+      summary: Change current user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /dashboard/summary:
+    get:
+      summary: Dashboard summary
+      x-permission: dashboard:view
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+  /system/users:
+    get:
+      summary: List users
+      x-permission: system:user:list
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      summary: Create user
+      x-permission: system:user:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/users/{id}:
+    get:
+      summary: Get user
+      x-permission: system:user:list
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+    put:
+      summary: Update user
+      x-permission: system:user:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    delete:
+      summary: Delete user
+      x-permission: system:user:delete
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/users/{id}/status:
+    patch:
+      summary: Update user status
+      x-permission: system:user:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserStatusRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/roles:
+    get:
+      summary: List roles
+      x-permission: system:role:list
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      summary: Create role
+      x-permission: system:role:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleRequest"
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/roles/{id}:
+    put:
+      summary: Update role
+      x-permission: system:role:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleRequest"
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    delete:
+      summary: Delete role
+      x-permission: system:role:delete
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/permissions:
+    get:
+      summary: List system permissions
+      x-permission: system:role:list
+      responses:
+        "200":
+          description: Permission catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PermissionDefinitionList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+  /system/menus:
+    get:
+      summary: List menus
+      x-permission: system:menu:list
+      responses:
+        "200":
+          description: Menu tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      summary: Create menu
+      x-permission: system:menu:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MenuRequest"
+      responses:
+        "201":
+          description: Created menu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Menu"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/menus/{id}:
+    put:
+      summary: Update menu
+      x-permission: system:menu:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MenuRequest"
+      responses:
+        "200":
+          description: Updated menu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Menu"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    delete:
+      summary: Delete menu
+      x-permission: system:menu:delete
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/modules:
+    get:
+      summary: List registered modules
+      x-permission: system:module:list
+      responses:
+        "200":
+          description: Registered modules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModuleList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+  /system/dictionaries:
+    get:
+      summary: List dictionaries
+      x-permission: system:dictionary:list
+      responses:
+        "200":
+          description: Dictionaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DictionaryList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      summary: Create dictionary
+      x-permission: system:dictionary:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DictionaryRequest"
+      responses:
+        "201":
+          description: Created dictionary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dictionary"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/dictionaries/code/{code}:
+    get:
+      summary: Get dictionary by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dictionary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dictionary"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /system/dictionaries/{id}:
+    put:
+      summary: Update dictionary
+      x-permission: system:dictionary:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DictionaryRequest"
+      responses:
+        "200":
+          description: Updated dictionary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dictionary"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    delete:
+      summary: Delete dictionary
+      x-permission: system:dictionary:delete
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /system/settings:
+    get:
+      summary: List settings
+      x-permission: system:setting:list
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingList"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+    post:
+      summary: Create setting
+      x-permission: system:setting:create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingRequest"
+      responses:
+        "201":
+          description: Created setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Setting"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+  /system/settings/{id}:
+    put:
+      summary: Update setting
+      x-permission: system:setting:update
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingRequest"
+      responses:
+        "200":
+          description: Updated setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Setting"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "413":
+          $ref: "#/components/responses/PayloadTooLargeError"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaTypeError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    delete:
+      summary: Delete setting
+      x-permission: system:setting:delete
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /system/audit-logs:
+    get:
+      summary: List audit logs
+      x-permission: system:audit:list
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: Searches actor, action, resource, IP, user agent, and detail.
+        - name: actor
+          in: query
+          schema:
+            type: string
+          description: Filters by actor username.
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filters by action code.
+        - name: resource
+          in: query
+          schema:
+            type: string
+          description: Filters by resource code.
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+          description: Filters by exact resource identifier.
+      responses:
+        "200":
+          description: Audit log page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogPage"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    BadRequestError:
+      description: Malformed JSON request body or invalid request syntax
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationError:
+      description: Field-level validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorEnvelope"
+    UnauthorizedError:
+      description: Missing, invalid, or expired bearer credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ForbiddenError:
+      description: Authenticated user lacks the required permission or cannot authenticate because the account is disabled
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFoundError:
+      description: Requested resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ConflictError:
+      description: Operation conflicts with a protected resource invariant
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    PayloadTooLargeError:
+      description: JSON request body exceeds the configured size limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UnsupportedMediaTypeError:
+      description: Request body is missing a JSON media type
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: uint64
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+  schemas:
+    AppConfig:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        environment:
+          type: string
+    HealthResponse:
+      type: object
+      required:
+        - name
+        - environment
+        - status
+        - time
+      properties:
+        name:
+          type: string
+        environment:
+          type: string
+        status:
+          type: string
+        time:
+          type: string
+          format: date-time
+    ReadinessCheck:
+      type: object
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        error:
+          type: string
+    ReadinessResponse:
+      type: object
+      required:
+        - status
+        - checks
+        - time
+      properties:
+        status:
+          type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReadinessCheck"
+        time:
+          type: string
+          format: date-time
+    DashboardSummary:
+      type: object
+      required:
+        - user_count
+        - role_count
+        - menu_count
+        - audit_log_count
+        - active_user_count
+      properties:
+        user_count:
+          type: integer
+        role_count:
+          type: integer
+        menu_count:
+          type: integer
+        audit_log_count:
+          type: integer
+        active_user_count:
+          type: integer
+    FieldError:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    ValidationErrorData:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+    ValidationErrorEnvelope:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: invalid input
+        data:
+          $ref: "#/components/schemas/ValidationErrorData"
+        request_id:
+          type: string
+    ErrorEnvelope:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 409
+        message:
+          type: string
+          example: last active administrator cannot be removed
+        data:
+          description: Optional error detail payload with any valid JSON value.
+        request_id:
+          type: string
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      required:
+        - token
+        - expires_at
+        - user
+      properties:
+        token:
+          type: string
+        expires_at:
+          type: integer
+          format: int64
+        user:
+          $ref: "#/components/schemas/PublicUser"
+    AuthProfile:
+      type: object
+      required:
+        - user
+        - roles
+        - permissions
+        - menus
+      properties:
+        user:
+          $ref: "#/components/schemas/PublicUser"
+        roles:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        permissions:
+          type: array
+          items:
+            type: string
+        menus:
+          type: array
+          items:
+            $ref: "#/components/schemas/Menu"
+    PublicUser:
+      type: object
+      required:
+        - id
+        - username
+        - nickname
+        - email
+        - phone
+        - avatar
+        - role_ids
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: uint64
+        username:
+          type: string
+        nickname:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        status:
+          type: string
+          enum:
+            - active
+            - disabled
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+    UserPage:
+      type: object
+      required:
+        - items
+        - total
+        - page
+        - page_size
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicUser"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+    Role:
+      type: object
+      required:
+        - id
+        - name
+        - code
+        - description
+        - permissions
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: uint64
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RoleList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Role"
+    PermissionDefinition:
+      type: object
+      required:
+        - code
+        - name
+        - module
+        - description
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        module:
+          type: string
+        description:
+          type: string
+    PermissionDefinitionList:
+      type: array
+      items:
+        $ref: "#/components/schemas/PermissionDefinition"
+    Menu:
+      type: object
+      required:
+        - id
+        - parent_id
+        - title
+        - name
+        - path
+        - icon
+        - component
+        - permission
+        - sort
+        - hidden
+      properties:
+        id:
+          type: integer
+          format: uint64
+        parent_id:
+          type: integer
+          format: uint64
+        title:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        icon:
+          type: string
+        component:
+          type: string
+        permission:
+          type: string
+          description: Optional permission code. When present, it must be registered in the active backend permission catalog.
+        sort:
+          type: integer
+        hidden:
+          type: boolean
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Menu"
+    MenuList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Menu"
+    Module:
+      type: object
+      required:
+        - name
+        - title
+        - version
+        - description
+        - permissions
+        - backend_routes
+        - menus
+        - frontend_routes
+        - migrations
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionDefinition"
+        backend_routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleBackendRoute"
+        menus:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleMenuEntry"
+        frontend_routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleFrontendRoute"
+        migrations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModuleMigrationSet"
+    ModuleBackendRoute:
+      type: object
+      required:
+        - name
+        - method
+        - path
+        - public
+        - permission
+        - summary
+      properties:
+        name:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        public:
+          type: boolean
+        permission:
+          type: string
+        summary:
+          type: string
+    ModuleMenuEntry:
+      type: object
+      required:
+        - name
+        - parent
+        - title
+        - path
+        - icon
+        - component
+        - permission
+        - sort
+        - hidden
+      properties:
+        name:
+          type: string
+        parent:
+          type: string
+        title:
+          type: string
+        path:
+          type: string
+        icon:
+          type: string
+        component:
+          type: string
+        permission:
+          type: string
+        sort:
+          type: integer
+        hidden:
+          type: boolean
+    ModuleFrontendRoute:
+      type: object
+      required:
+        - name
+        - path
+        - component
+        - title
+        - permission
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        component:
+          type: string
+        title:
+          type: string
+        permission:
+          type: string
+    ModuleMigrationSet:
+      type: object
+      required:
+        - driver
+        - dir
+        - seeds_dir
+      properties:
+        driver:
+          type: string
+        dir:
+          type: string
+        seeds_dir:
+          type: string
+    ModuleList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Module"
+    DictionaryItem:
+      type: object
+      required:
+        - label
+        - value
+        - sort
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        sort:
+          type: integer
+    Dictionary:
+      type: object
+      required:
+        - id
+        - code
+        - name
+        - items
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: uint64
+        code:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DictionaryItem"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DictionaryList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Dictionary"
+    Setting:
+      type: object
+      required:
+        - id
+        - key
+        - value
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: uint64
+        key:
+          type: string
+        value:
+          description: Any valid JSON value.
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SettingList:
+      type: array
+      items:
+        $ref: "#/components/schemas/Setting"
+    AuditLog:
+      type: object
+      required:
+        - id
+        - actor_id
+        - actor
+        - action
+        - resource
+        - resource_id
+        - ip
+        - user_agent
+        - detail
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: uint64
+        actor_id:
+          type: integer
+          format: uint64
+        actor:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        resource_id:
+          type: string
+        ip:
+          type: string
+        user_agent:
+          type: string
+        detail:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AuditLogPage:
+      type: object
+      required:
+        - items
+        - total
+        - page
+        - page_size
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+    OkResult:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+    UpdateProfileRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+        nickname:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        status:
+          type: string
+    UpdateUserRequest:
+      type: object
+      required:
+        - username
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Optional. Leave empty to keep the current password.
+        nickname:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        status:
+          type: string
+    UserStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - active
+            - disabled
+    RoleRequest:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    MenuRequest:
+      type: object
+      required:
+        - title
+        - name
+        - path
+      properties:
+        parent_id:
+          type: integer
+          format: uint64
+        title:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        icon:
+          type: string
+        component:
+          type: string
+        permission:
+          type: string
+        sort:
+          type: integer
+        hidden:
+          type: boolean
+    DictionaryRequest:
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - label
+              - value
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+              sort:
+                type: integer
+    SettingRequest:
+      type: object
+      required:
+        - key
+      properties:
+        key:
+          type: string
+        value:
+          description: Any valid JSON value. Defaults to an empty object when omitted.
+        description:
+          type: string

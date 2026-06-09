@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gov2-postgres
+    environment:
+      POSTGRES_DB: gov2
+      POSTGRES_USER: gov2
+      POSTGRES_PASSWORD: gov2
+    ports:
+      - "5432:5432"
+    volumes:
+      - gov2-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gov2 -d gov2"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  gov2-postgres-data:

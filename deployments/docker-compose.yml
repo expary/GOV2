@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gov2-postgres
+    environment:
+      POSTGRES_DB: gov2
+      POSTGRES_USER: gov2
+      POSTGRES_PASSWORD: gov2
+    ports:
+      - "5432:5432"
+    volumes:
+      - gov2-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gov2 -d gov2"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  gov2:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: gov2:local
+    container_name: gov2-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOV2_ENVIRONMENT: development
+      GOV2_ADDR: :8080
+      GOV2_TOKEN_SECRET: gov2-local-compose-secret-with-more-than-32-characters
+      GOV2_STORAGE_DRIVER: pgx
+      GOV2_STORAGE_DSN: postgres://gov2:gov2@postgres:5432/gov2?sslmode=disable
+      GOV2_AUTO_MIGRATE: "true"
+      GOV2_STATIC_DIR: /app/web/dist
+      GOV2_MIGRATIONS_DIR: /app/migrations
+      GOV2_SEEDS_DIR: /app/migrations/seeds
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  gov2-postgres-data:

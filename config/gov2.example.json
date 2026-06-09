@@ -1,0 +1,28 @@
+{
+  "app": {
+    "name": "GOV2",
+    "environment": "development"
+  },
+  "server": {
+    "addr": ":8080",
+    "read_timeout": "5s",
+    "write_timeout": "10s",
+    "idle_timeout": "60s"
+  },
+  "security": {
+    "token_secret": "change-me-before-production",
+    "token_ttl": "2h",
+    "issuer": "gov2",
+    "allowed_origins": ["*"]
+  },
+  "storage": {
+    "driver": "memory",
+    "dsn": "postgres://gov2:gov2@localhost:5432/gov2?sslmode=disable",
+    "auto_migrate": false,
+    "migrations_dir": "migrations",
+    "seeds_dir": "migrations/seeds"
+  },
+  "web": {
+    "static_dir": "web/dist"
+  }
+}

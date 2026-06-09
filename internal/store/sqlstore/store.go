@@ -392,7 +392,7 @@ func (s *Store) CreateMenu(menu domain.Menu) (domain.Menu, error) {
 	}
 
 	if err := s.withTx(ctx, func(tx *sql.Tx) error {
-		if err := ensurePermission(ctx, tx, menu.Permission); err != nil {
+		if err := requirePermission(ctx, tx, menu.Permission); err != nil {
 			return err
 		}
 		err := tx.QueryRowContext(ctx, `
@@ -444,7 +444,7 @@ func (s *Store) UpdateMenu(id uint64, update domain.Menu) (domain.Menu, error) {
 	}
 
 	if err := s.withTx(ctx, func(tx *sql.Tx) error {
-		if err := ensurePermission(ctx, tx, update.Permission); err != nil {
+		if err := requirePermission(ctx, tx, update.Permission); err != nil {
 			return err
 		}
 		result, err := tx.ExecContext(ctx, `
@@ -1177,7 +1177,7 @@ func assignRolePermission(ctx context.Context, tx *sql.Tx, roleID uint64, permis
 	if permission == "" {
 		return nil
 	}
-	if err := ensurePermission(ctx, tx, permission); err != nil {
+	if err := requirePermission(ctx, tx, permission); err != nil {
 		return err
 	}
 	_, err := tx.ExecContext(ctx, `
@@ -1203,16 +1203,19 @@ VALUES ($1, $2, $3, $4)`, dictionaryID, item.Label, item.Value, item.Sort); err 
 	return nil
 }
 
-func ensurePermission(ctx context.Context, tx *sql.Tx, permission string) error {
+func requirePermission(ctx context.Context, tx *sql.Tx, permission string) error {
 	permission = strings.TrimSpace(permission)
 	if permission == "" {
 		return nil
 	}
-	_, err := tx.ExecContext(ctx, `
-INSERT INTO gov2_permissions (code, name, module, description)
-VALUES ($1, $1, 'custom', '')
-ON CONFLICT (code) DO NOTHING`, permission)
-	return err
+	var exists bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM gov2_permissions WHERE code = $1)", permission).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return repository.ErrInvalidReference
+	}
+	return nil
 }
 
 func nullableUint64(value uint64) any {

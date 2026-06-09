@@ -42,7 +42,7 @@ The helper is used by:
 
 - user create/update with role assignments
 - role create/update with permission assignments
-- menu create/update with custom permission creation
+- menu create/update with registered permission validation
 - dictionary create/update with item replacement
 
 This keeps rollback, commit, and write-error mapping consistent while leaving single-table writes simple.
@@ -75,6 +75,8 @@ Application startup now selects storage by config:
 The built-in seed creates `site.title` only when that setting is missing, so
 repeat seed runs do not reset an operator-customized application title.
 Production detection is case-insensitive and trims whitespace before deciding whether to skip seed files and development user bootstrap.
+Role and menu writes reference the seeded permission catalog. SQL persistence
+rejects unknown permission codes instead of creating ad hoc permission records.
 
 ## Development Bootstrap
 

@@ -157,25 +157,31 @@ func TestPostgresStoreIntegration(t *testing.T) {
 
 	t.Run("roles persist permissions and protect assigned roles", func(t *testing.T) {
 		roleCode := "it_role_" + suffix
-		permission := "integration:role:" + suffix
 		role, err := store.CreateRole(domain.Role{
 			Name:        "Integration Role",
 			Code:        roleCode,
 			Description: "Created by PostgreSQL integration test",
 			Permissions: []string{
 				domain.PermissionSystemAuditList,
-				permission,
+				domain.PermissionSystemRoleList,
 			},
 		})
 		if err != nil {
 			t.Fatalf("create role: %v", err)
 		}
-		if !containsString(role.Permissions, permission) {
-			t.Fatalf("expected role permissions to include %q, got %+v", permission, role.Permissions)
+		if !containsString(role.Permissions, domain.PermissionSystemRoleList) {
+			t.Fatalf("expected role permissions to include %q, got %+v", domain.PermissionSystemRoleList, role.Permissions)
 		}
 
 		if _, err := store.CreateRole(domain.Role{Name: "Duplicate Role", Code: strings.ToUpper(roleCode)}); !errors.Is(err, repository.ErrConflict) {
 			t.Fatalf("expected duplicate role code conflict, got %v", err)
+		}
+		if _, err := store.CreateRole(domain.Role{
+			Name:        "Unknown Permission Role",
+			Code:        "it_unknown_permission_role_" + suffix,
+			Permissions: []string{"integration:role:" + suffix},
+		}); !errors.Is(err, repository.ErrInvalidReference) {
+			t.Fatalf("expected unknown role permission invalid reference, got %v", err)
 		}
 
 		updated, err := store.UpdateRole(role.ID, domain.Role{
@@ -189,7 +195,7 @@ func TestPostgresStoreIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("update role: %v", err)
 		}
-		if updated.Name != "Integration Role Updated" || !containsString(updated.Permissions, domain.PermissionSystemSettingList) || containsString(updated.Permissions, permission) {
+		if updated.Name != "Integration Role Updated" || !containsString(updated.Permissions, domain.PermissionSystemSettingList) || containsString(updated.Permissions, domain.PermissionSystemRoleList) {
 			t.Fatalf("expected updated role permissions to replace previous values, got %+v", updated)
 		}
 
@@ -238,6 +244,17 @@ func TestPostgresStoreIntegration(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("create child menu: %v", err)
+		}
+		if _, err := store.CreateMenu(domain.Menu{
+			ParentID:   parent.ID,
+			Title:      "Unknown Permission Child",
+			Name:       "it-menu-unknown-permission-" + suffix,
+			Path:       "/it-" + suffix + "/unknown-permission",
+			Component:  "IntegrationUnknownPermissionView",
+			Permission: "integration:menu:" + suffix,
+			Sort:       703,
+		}); !errors.Is(err, repository.ErrInvalidReference) {
+			t.Fatalf("expected unknown menu permission invalid reference, got %v", err)
 		}
 
 		menus, err := store.ListMenus()

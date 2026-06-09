@@ -109,6 +109,8 @@ These tests exercise:
   role permission entries, including exclusive wildcard profile aggregation
 - built-in frontend route metadata against actual Vue Router protected routes
 - SQL seed permission and menu metadata against backend permission and module registries
+- SQL startup gating that skips automatic seed data and development-user
+  bootstrap in production
 - memory-store seed role permissions and menu metadata against built-in module defaults
 - compile-time extension route middleware and RBAC behavior, including
   non-empty permissions overriding an accidentally public route flag

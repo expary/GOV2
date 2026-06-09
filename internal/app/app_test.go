@@ -112,3 +112,45 @@ func TestOpenStoreRejectsBlankSQLDSNAfterNormalization(t *testing.T) {
 		t.Fatalf("expected storage.dsn error, got %v", err)
 	}
 }
+
+func TestSQLProductionSkipsAutomaticSeedsAndDevelopmentBootstrap(t *testing.T) {
+	cfg := config.Config{
+		App: config.AppConfig{Environment: " Production "},
+		Storage: config.StorageConfig{
+			Driver:      " pgx ",
+			AutoMigrate: true,
+		},
+	}
+
+	if shouldRunAutomaticSQLSeeds(cfg) {
+		t.Fatal("production SQL startup must not run seed data automatically")
+	}
+	if shouldBootstrapSQLDevelopmentData(cfg) {
+		t.Fatal("production SQL startup must not bootstrap development users")
+	}
+}
+
+func TestSQLDevelopmentRunsAutomaticSeedsOnlyWithAutoMigrate(t *testing.T) {
+	cfg := config.Config{
+		App: config.AppConfig{Environment: "development"},
+		Storage: config.StorageConfig{
+			Driver:      "pgx",
+			AutoMigrate: true,
+		},
+	}
+
+	if !shouldRunAutomaticSQLSeeds(cfg) {
+		t.Fatal("development SQL startup should run seeds when auto-migrate is enabled")
+	}
+	if !shouldBootstrapSQLDevelopmentData(cfg) {
+		t.Fatal("development SQL startup should bootstrap development users")
+	}
+
+	cfg.Storage.AutoMigrate = false
+	if shouldRunAutomaticSQLSeeds(cfg) {
+		t.Fatal("development SQL startup must not run seeds when auto-migrate is disabled")
+	}
+	if !shouldBootstrapSQLDevelopmentData(cfg) {
+		t.Fatal("development SQL bootstrap should not depend on auto-migrate")
+	}
+}

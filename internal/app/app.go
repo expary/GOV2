@@ -176,7 +176,7 @@ func openStore(cfg config.Config, logger *slog.Logger) (repository.Store, func()
 			return nil, nil, err
 		}
 		logger.Info("database migrations checked", "applied", len(applied))
-		if !isProductionEnvironment(cfg.App.Environment) {
+		if shouldRunAutomaticSQLSeeds(cfg) {
 			seeds, err := runner.RunSeeds(ctx, cfg.Storage.SeedsDir)
 			if err != nil {
 				_ = db.Close()
@@ -187,11 +187,19 @@ func openStore(cfg config.Config, logger *slog.Logger) (repository.Store, func()
 	}
 
 	store := sqlstore.New(db)
-	if !isProductionEnvironment(cfg.App.Environment) {
+	if shouldBootstrapSQLDevelopmentData(cfg) {
 		if err := store.BootstrapDevelopmentData(); err != nil {
 			_ = db.Close()
 			return nil, nil, err
 		}
 	}
 	return store, db.Close, nil
+}
+
+func shouldRunAutomaticSQLSeeds(cfg config.Config) bool {
+	return cfg.Storage.AutoMigrate && !isProductionEnvironment(cfg.App.Environment)
+}
+
+func shouldBootstrapSQLDevelopmentData(cfg config.Config) bool {
+	return !isProductionEnvironment(cfg.App.Environment) && !isMemoryStorageDriver(cfg.Storage.Driver)
 }

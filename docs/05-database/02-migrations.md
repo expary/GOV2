@@ -64,6 +64,8 @@ Operational settings are not reset by repeat seed runs; administrators may chang
 ## Rules
 
 - Migrations are ordered and append-only after release.
+- Each numbered `.up.sql` migration should have a matching `.down.sql` file for
+  development rollback and contract completeness.
 - Seed data must be idempotent.
 - Built-in permission and menu seed metadata must stay aligned with the backend
   permission definitions and module registry; normal Go tests check this

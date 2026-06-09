@@ -146,6 +146,28 @@ func TestMigrationsDefineAuditLogFilterIndexes(t *testing.T) {
 	}
 }
 
+func TestMigrationFilesAreNumberedAndPaired(t *testing.T) {
+	files := migrationFileNames(t)
+	namePattern := regexp.MustCompile(`^([0-9]{6}_[a-z0-9_]+)\.(up|down)\.sql$`)
+	up := map[string]struct{}{}
+	down := map[string]struct{}{}
+
+	for _, name := range files {
+		match := namePattern.FindStringSubmatch(name)
+		if match == nil {
+			t.Fatalf("migration file %q must match NNNNNN_name.(up|down).sql", name)
+		}
+		switch match[2] {
+		case "up":
+			up[match[1]] = struct{}{}
+		case "down":
+			down[match[1]] = struct{}{}
+		}
+	}
+
+	assertMapKeys(t, "migration up/down pairs", stringKeys(up), stringKeys(down))
+}
+
 func readSystemSeed(t *testing.T) string {
 	t.Helper()
 
@@ -160,16 +182,12 @@ func readUpMigrations(t *testing.T) string {
 	t.Helper()
 
 	dir := "../../migrations"
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read migrations: %v", err)
-	}
 	names := make([]string, 0)
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".up.sql") {
+	for _, name := range migrationFileNames(t) {
+		if !strings.HasSuffix(name, ".up.sql") {
 			continue
 		}
-		names = append(names, entry.Name())
+		names = append(names, name)
 	}
 	sort.Strings(names)
 
@@ -182,6 +200,24 @@ func readUpMigrations(t *testing.T) string {
 		parts = append(parts, string(data))
 	}
 	return strings.Join(parts, "\n")
+}
+
+func migrationFileNames(t *testing.T) []string {
+	t.Helper()
+
+	entries, err := os.ReadDir("../../migrations")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	names := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	sort.Strings(names)
+	return names
 }
 
 type seedPermission struct {

@@ -125,6 +125,8 @@ These tests exercise:
 - explicit SQL read-error propagation for list and dashboard summary methods
 - explicit SQL affected-row error propagation for not-found write detection
 - explicit SQL audit-write error propagation
+- SQL store transaction helper error mapping for begin, function, and commit
+  failures, including rollback on function failure
 - audit log creation for core system writes
 - SQL-backed login, profile, RBAC, core system writes, and audit-log filtering when PostgreSQL integration is enabled
 

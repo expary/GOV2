@@ -1,13 +1,24 @@
 package sqlstore
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/expary/GOV2/internal/domain"
 	"github.com/expary/GOV2/internal/repository"
 	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const sqlstoreTestDriverName = "gov2_sqlstore_test"
+
+var (
+	sqlstoreTestDriverOnce   sync.Once
+	sqlstoreTestDriverStates sync.Map
 )
 
 func TestMapWriteErrorClassifiesPostgresErrors(t *testing.T) {
@@ -93,6 +104,70 @@ func TestAddAuditLogReturnsDatabaseError(t *testing.T) {
 	}
 }
 
+func TestWithTxMapsTransactionErrors(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		state := &txTestDriverState{beginErr: &pgconn.PgError{Code: "23505"}}
+		store := New(openTxTestDB(t, state))
+
+		err := store.withTx(context.Background(), func(*sql.Tx) error {
+			t.Fatal("transaction function should not run when begin fails")
+			return nil
+		})
+		if !errors.Is(err, repository.ErrConflict) {
+			t.Fatalf("expected begin error to map to conflict, got %v", err)
+		}
+		snapshot := state.snapshot()
+		if snapshot.begins != 1 || snapshot.commits != 0 || snapshot.rollbacks != 0 {
+			t.Fatalf("transaction counts = begins:%d commits:%d rollbacks:%d, want 1/0/0", snapshot.begins, snapshot.commits, snapshot.rollbacks)
+		}
+	})
+
+	t.Run("function error", func(t *testing.T) {
+		state := &txTestDriverState{}
+		store := New(openTxTestDB(t, state))
+
+		err := store.withTx(context.Background(), func(*sql.Tx) error {
+			return &pgconn.PgError{Code: "23503"}
+		})
+		if !errors.Is(err, repository.ErrInvalidReference) {
+			t.Fatalf("expected function error to map to invalid reference, got %v", err)
+		}
+		snapshot := state.snapshot()
+		if snapshot.begins != 1 || snapshot.commits != 0 || snapshot.rollbacks != 1 {
+			t.Fatalf("transaction counts = begins:%d commits:%d rollbacks:%d, want 1/0/1", snapshot.begins, snapshot.commits, snapshot.rollbacks)
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		state := &txTestDriverState{commitErr: &pgconn.PgError{Code: "23514"}}
+		store := New(openTxTestDB(t, state))
+
+		err := store.withTx(context.Background(), func(*sql.Tx) error {
+			return nil
+		})
+		if !errors.Is(err, repository.ErrConstraint) {
+			t.Fatalf("expected commit error to map to constraint, got %v", err)
+		}
+		snapshot := state.snapshot()
+		if snapshot.begins != 1 || snapshot.commits != 1 {
+			t.Fatalf("transaction counts = begins:%d commits:%d, want 1/1", snapshot.begins, snapshot.commits)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		state := &txTestDriverState{}
+		store := New(openTxTestDB(t, state))
+
+		if err := store.withTx(context.Background(), func(*sql.Tx) error { return nil }); err != nil {
+			t.Fatalf("expected successful transaction, got %v", err)
+		}
+		snapshot := state.snapshot()
+		if snapshot.begins != 1 || snapshot.commits != 1 || snapshot.rollbacks != 0 {
+			t.Fatalf("transaction counts = begins:%d commits:%d rollbacks:%d, want 1/1/0", snapshot.begins, snapshot.commits, snapshot.rollbacks)
+		}
+	})
+}
+
 func TestNormalizePageUsesRepositoryPaginationContract(t *testing.T) {
 	page, pageSize := normalizePage(0, repository.MaxPageSize+1)
 	if page != 1 || pageSize != repository.MaxPageSize {
@@ -146,4 +221,112 @@ func (r fakeResult) LastInsertId() (int64, error) {
 
 func (r fakeResult) RowsAffected() (int64, error) {
 	return r.rowsAffected, r.rowsAffectedErr
+}
+
+type txTestDriverSnapshot struct {
+	begins    int
+	commits   int
+	rollbacks int
+}
+
+type txTestDriverState struct {
+	mu        sync.Mutex
+	beginErr  error
+	commitErr error
+	begins    int
+	commits   int
+	rollbacks int
+}
+
+func (s *txTestDriverState) snapshot() txTestDriverSnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return txTestDriverSnapshot{
+		begins:    s.begins,
+		commits:   s.commits,
+		rollbacks: s.rollbacks,
+	}
+}
+
+func openTxTestDB(t *testing.T, state *txTestDriverState) *sql.DB {
+	t.Helper()
+
+	sqlstoreTestDriverOnce.Do(func() {
+		sql.Register(sqlstoreTestDriverName, txTestDriver{})
+	})
+
+	dsn := fmt.Sprintf("%s-%p", t.Name(), state)
+	sqlstoreTestDriverStates.Store(dsn, state)
+	t.Cleanup(func() {
+		sqlstoreTestDriverStates.Delete(dsn)
+	})
+
+	db, err := sql.Open(sqlstoreTestDriverName, dsn)
+	if err != nil {
+		t.Fatalf("open tx test db: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close tx test db: %v", err)
+		}
+	})
+	return db
+}
+
+type txTestDriver struct{}
+
+func (txTestDriver) Open(name string) (driver.Conn, error) {
+	stateValue, ok := sqlstoreTestDriverStates.Load(name)
+	if !ok {
+		return nil, fmt.Errorf("missing tx test driver state for %q", name)
+	}
+	return &txTestConn{state: stateValue.(*txTestDriverState)}, nil
+}
+
+type txTestConn struct {
+	state *txTestDriverState
+}
+
+func (*txTestConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("tx test driver does not support prepared statements")
+}
+
+func (*txTestConn) Close() error {
+	return nil
+}
+
+func (c *txTestConn) Begin() (driver.Tx, error) {
+	return c.BeginTx(context.Background(), driver.TxOptions{})
+}
+
+func (c *txTestConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+
+	c.state.begins++
+	if c.state.beginErr != nil {
+		return nil, c.state.beginErr
+	}
+	return &txTestTx{state: c.state}, nil
+}
+
+type txTestTx struct {
+	state *txTestDriverState
+}
+
+func (tx *txTestTx) Commit() error {
+	tx.state.mu.Lock()
+	defer tx.state.mu.Unlock()
+
+	tx.state.commits++
+	return tx.state.commitErr
+}
+
+func (tx *txTestTx) Rollback() error {
+	tx.state.mu.Lock()
+	defer tx.state.mu.Unlock()
+
+	tx.state.rollbacks++
+	return nil
 }

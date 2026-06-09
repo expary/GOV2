@@ -198,6 +198,23 @@ func TestPostgresStoreIntegration(t *testing.T) {
 		if updated.Name != "Integration Role Updated" || !containsString(updated.Permissions, domain.PermissionSystemSettingList) || containsString(updated.Permissions, domain.PermissionSystemRoleList) {
 			t.Fatalf("expected updated role permissions to replace previous values, got %+v", updated)
 		}
+		if _, err := store.UpdateRole(role.ID, domain.Role{
+			Name:        "Integration Role Invalid",
+			Code:        roleCode,
+			Description: "Unknown permission update should roll back",
+			Permissions: []string{
+				"integration:role:update:" + suffix,
+			},
+		}); !errors.Is(err, repository.ErrInvalidReference) {
+			t.Fatalf("expected unknown role permission update invalid reference, got %v", err)
+		}
+		unchangedRole, err := store.GetRole(role.ID)
+		if err != nil {
+			t.Fatalf("get role after failed permission update: %v", err)
+		}
+		if unchangedRole.Name != updated.Name || !containsString(unchangedRole.Permissions, domain.PermissionSystemSettingList) {
+			t.Fatalf("expected failed role permission update to roll back, got %+v", unchangedRole)
+		}
 
 		createdUser, err := store.CreateUser(domain.User{
 			Username:     "it_role_user_" + suffix,
@@ -293,6 +310,24 @@ func TestPostgresStoreIntegration(t *testing.T) {
 		}
 		if updatedChild.Title != "Integration Child Updated" || !updatedChild.Hidden {
 			t.Fatalf("expected updated child menu state, got %+v", updatedChild)
+		}
+		if _, err := store.UpdateMenu(child.ID, domain.Menu{
+			ParentID:   parent.ID,
+			Title:      "Integration Child Invalid",
+			Name:       child.Name,
+			Path:       child.Path,
+			Component:  child.Component,
+			Permission: "integration:menu:update:" + suffix,
+			Sort:       704,
+		}); !errors.Is(err, repository.ErrInvalidReference) {
+			t.Fatalf("expected unknown menu permission update invalid reference, got %v", err)
+		}
+		unchangedChild, err := store.GetMenu(child.ID)
+		if err != nil {
+			t.Fatalf("get child menu after failed permission update: %v", err)
+		}
+		if unchangedChild.Title != updatedChild.Title || unchangedChild.Permission != updatedChild.Permission || unchangedChild.Sort != updatedChild.Sort {
+			t.Fatalf("expected failed menu permission update to roll back, got %+v", unchangedChild)
 		}
 
 		if err := store.DeleteMenu(child.ID); err != nil {
